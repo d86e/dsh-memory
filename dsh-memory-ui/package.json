@@ -1,0 +1,19 @@
+{
+  "name": "@d86e/dsh-memory-ui",
+  "version": "0.1.0",
+  "description": "DSH 记忆管理面板插件",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": { "default": "./lib/index.js" }
+  },
+  "files": ["lib"],
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-client-ui-conversation": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": { "optional": true },
+    "@deepseek-ai/dsh-client-ui-conversation": { "optional": true }
+  }
+}

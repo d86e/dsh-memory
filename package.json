@@ -1,0 +1,82 @@
+{
+  "name": "@d86e/dsh-memory",
+  "version": "0.2.0",
+  "description": "Zero-dependency local memory system for DSH with SQLite, FTS5, ONNX embedding, and browser UI",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./memory-store": {
+      "types": "./src/memory-store.d.ts",
+      "default": "./src/memory-store.js"
+    },
+    "./embedding": {
+      "types": "./src/embedding.d.ts",
+      "default": "./src/embedding.js"
+    },
+    "./service": {
+      "types": "./src/service.d.ts",
+      "default": "./src/service.js"
+    }
+  },
+  "files": [
+    "src",
+    "lib",
+    "dsh-memory-ui",
+    "models",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test tests/*.js",
+    "prepublishOnly": "npm test"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/d86e/dsh-memory"
+  },
+  "bugs": {
+    "url": "https://github.com/d86e/dsh-memory/issues"
+  },
+  "homepage": "https://github.com/d86e/dsh-memory#readme",
+  "author": "d86e",
+  "keywords": [
+    "dsh",
+    "memory",
+    "sqlite",
+    "vector-search",
+    "fts5",
+    "semantic-search",
+    "onnx",
+    "embedding",
+    "plugin"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "onnxruntime-node": "^1.29.0",
+    "sqlite-vec": "^0.1.9"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-tools": "^0.1.0-rc.8",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    },
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/schemastery": {
+      "optional": true
+    }
+  }
+}
