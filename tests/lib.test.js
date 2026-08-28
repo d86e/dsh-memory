@@ -12,7 +12,7 @@ function makeVector(seed = 0.1) {
 
 test('lib/index.js: 导出检查', () => {
   assert.equal(name, 'dsh-memory');
-  assert.deepEqual(inject, ['tools', 'webServer', 'sessions']);
+  assert.deepEqual(inject, ['tools', 'webServer', 'sessions', 'systemPrompt']);
   assert.equal(VEC_DIMENSIONS, 768);
   assert.ok(typeof createService === 'function');
   assert.ok(typeof getMemoryService === 'function');

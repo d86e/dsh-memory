@@ -222,6 +222,194 @@ CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(created);
     return rows.map((r) => this._toMemory(r));
   }
 
+  /**
+   * 分页 + 过滤 + 排序的统一查询。返回 `{ rows, total }`。
+   * rows 不含 embedding 字段（减少带宽）。
+   * @param {object} opts
+   * @param {number} [opts.offset=0]
+   * @param {number} [opts.limit=50]
+   * @param {string} [opts.sort='created']   id|content|layer|track|priority|created|updated
+   * @param {string} [opts.order='desc']     asc|desc
+   * @param {number[]} [opts.layers]         多个 layer（OR）
+   * @param {string[]} [opts.tracks]         多个 track（OR）
+   * @param {number} [opts.minPriority=1]    隐藏软删除
+   * @param {string} [opts.q]                关键词（FTS5）
+   * @param {string[]} [opts.tags]           必须包含所有 tag
+   * @returns {{rows: object[], total: number}}
+   */
+  listPage(opts = {}) {
+    const {
+      offset = 0, limit = 50,
+      sort = 'created', order = 'desc',
+      layers, tracks,
+      minPriority = 1,
+      q, tags,
+    } = opts;
+    const clampedOffset = Math.max(0, Number(offset) || 0);
+    const clampedLimit = Math.max(1, Math.min(Number(limit) || 50, 500));
+    const colMap = { id: 'id', content: 'content', layer: 'layer', track: 'track', priority: 'priority', created: 'created', updated: 'updated' };
+    const col = colMap[sort] || 'created';
+    const dir = String(order).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
+
+    const where = [];
+    const params = [];
+    where.push('priority >= ?'); params.push(minPriority);
+    if (Array.isArray(layers) && layers.length) {
+      where.push(`layer IN (${layers.map(() => '?').join(',')})`);
+      params.push(...layers.map(Number));
+    }
+    if (Array.isArray(tracks) && tracks.length) {
+      where.push(`track IN (${tracks.map(() => '?').join(',')})`);
+      params.push(...tracks);
+    }
+    if (Array.isArray(tags) && tags.length) {
+      // 必须包含所有 tag（JSON 数组包含；用 ESCAPE 转义 LIKE 通配符）
+      for (const tag of tags) {
+        where.push("tags LIKE ? ESCAPE '\\'");
+        params.push(`%"${String(tag).replace(/[\\%_]/g, '\\$&')}"%`);
+      }
+    }
+    if (q && String(q).trim()) {
+      // FTS5 子查询 → 用 IN 过滤主表
+      const ftsQuery = toFtsQuery(q);
+      if (ftsQuery) {
+        where.push('id IN (SELECT rowid FROM memories_fts WHERE memories_fts MATCH ?)');
+        params.push(ftsQuery);
+      }
+    }
+    const whereSql = where.length ? 'WHERE ' + where.join(' AND ') : '';
+
+    const totalRow = this.db.prepare(`SELECT COUNT(*) AS n FROM memories ${whereSql}`).get(...params);
+    const total = totalRow?.n ?? 0;
+
+    const rows = this.db.prepare(`
+      SELECT id, content, layer, track, priority, tags, source, created, updated
+      FROM memories
+      ${whereSql}
+      ORDER BY ${col} ${dir}, id ${dir}
+      LIMIT ? OFFSET ?
+    `).all(...params, clampedLimit, clampedOffset);
+
+    return {
+      rows: rows.map((r) => ({ ...r, tags: this._parseTags(r.tags) })),
+      total,
+      offset: clampedOffset,
+      limit: clampedLimit,
+    };
+  }
+
+  /** 统计：总数 + 按 layer/track/priority 分组 + 常用 tag */
+  stats() {
+    const total = this.db.prepare('SELECT COUNT(*) AS n FROM memories WHERE priority > 0').get().n;
+    const byLayer = this.db.prepare('SELECT layer, COUNT(*) AS n FROM memories WHERE priority > 0 GROUP BY layer ORDER BY layer').all();
+    const byTrack = this.db.prepare('SELECT track, COUNT(*) AS n FROM memories WHERE priority > 0 GROUP BY track ORDER BY n DESC').all();
+    const byPriority = this.db.prepare('SELECT priority, COUNT(*) AS n FROM memories WHERE priority > 0 GROUP BY priority ORDER BY priority').all();
+
+    // 统计所有 tag：从 JSON 中提取，扁平化后计数
+    const tagRows = this.db.prepare("SELECT tags FROM memories WHERE priority > 0 AND tags IS NOT NULL AND tags != 'null'").all();
+    const tagCounts = new Map();
+    for (const r of tagRows) {
+      let arr;
+      try { arr = JSON.parse(r.tags); } catch { continue; }
+      if (!Array.isArray(arr)) continue;
+      for (const t of arr) {
+        if (typeof t !== 'string' || !t) continue;
+        tagCounts.set(t, (tagCounts.get(t) || 0) + 1);
+      }
+    }
+    const topTags = [...tagCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 50).map(([tag, count]) => ({ tag, count }));
+
+    return { total, byLayer, byTrack, byPriority, topTags };
+  }
+
+  /** 批量更新（同一字段集） */
+  batchUpdate(ids, changes = {}) {
+    if (!Array.isArray(ids) || ids.length === 0) return { updated: 0 };
+    const allowed = ['content', 'layer', 'track', 'priority', 'tags', 'source'];
+    const fields = [];
+    const params = [];
+    for (const key of Object.keys(changes)) {
+      if (!allowed.includes(key)) continue;
+      if (key === 'tags') {
+        fields.push('tags = ?');
+        params.push(this._encodeTags(changes.tags));
+      } else {
+        fields.push(`${key} = ?`);
+        params.push(changes[key]);
+      }
+    }
+    if (fields.length === 0) return { updated: 0 };
+    const tx = this.db.transaction((idList) => {
+      const stmt = this.db.prepare(
+        `UPDATE memories SET ${fields.join(', ')}, updated = CURRENT_TIMESTAMP WHERE id = ?`
+      );
+      let n = 0;
+      for (const id of idList) {
+        const r = stmt.run(...params, Number(id));
+        n += r.changes;
+      }
+      return n;
+    });
+    const updated = tx(ids);
+    return { updated };
+  }
+
+  /** 批量删除（软/硬） */
+  batchRemove(ids, { hard = false } = {}) {
+    if (!Array.isArray(ids) || ids.length === 0) return { removed: 0 };
+    const tx = this.db.transaction((idList) => {
+      let n = 0;
+      if (hard) {
+        const delVec = this.db.prepare('DELETE FROM memories_vec WHERE rowid = ?');
+        const del = this.db.prepare('DELETE FROM memories WHERE id = ?');
+        for (const id of idList) {
+          const nid = Number(id);
+          delVec.run(nid);
+          const r = del.run(nid);
+          if (r.changes) n++;
+        }
+      } else {
+        // 软删除：把 priority 设为 0
+        const upd = this.db.prepare('UPDATE memories SET priority = 0, updated = CURRENT_TIMESTAMP WHERE id = ?');
+        for (const id of idList) {
+          const r = upd.run(Number(id));
+          if (r.changes) n++;
+        }
+      }
+      return n;
+    });
+    const removed = tx(ids);
+    return { removed };
+  }
+
+  /** 批量加/减 tag（基于现有 tag 数组） */
+  batchTag(ids, { add = [], remove = [] } = {}) {
+    if (!Array.isArray(ids) || ids.length === 0) return { updated: 0 };
+    const addSet = new Set((add || []).map(String));
+    const removeSet = new Set((remove || []).map(String));
+    if (addSet.size === 0 && removeSet.size === 0) return { updated: 0 };
+    const tx = this.db.transaction((idList) => {
+      const sel = this.db.prepare('SELECT id, tags FROM memories WHERE id = ?');
+      const upd = this.db.prepare('UPDATE memories SET tags = ?, updated = CURRENT_TIMESTAMP WHERE id = ?');
+      let n = 0;
+      for (const id of idList) {
+        const row = sel.get(Number(id));
+        if (!row) continue;
+        let cur = [];
+        try { const p = JSON.parse(row.tags); if (Array.isArray(p)) cur = p.map(String); } catch { /* keep [] */ }
+        const next = new Set(cur);
+        for (const t of removeSet) next.delete(t);
+        for (const t of addSet) next.add(t);
+        const arr = [...next];
+        upd.run(JSON.stringify(arr), Number(id));
+        n++;
+      }
+      return n;
+    });
+    const updated = tx(ids);
+    return { updated };
+  }
+
   // 更新字段；自动设置 updated 时间戳，返回更新后的记录（无则 null）。
   update(id, changes = {}) {
     const fields = [];
@@ -288,7 +476,7 @@ CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(created);
     const ftsQuery = toFtsQuery(query);
     if (!ftsQuery) return [];
 
-    let sql = `SELECT m.id, m.content, m.layer, m.track, m.priority, fts.rank AS rank
+    let sql = `SELECT m.id, m.content, m.layer, m.track, m.priority, m.tags, fts.rank AS rank
       FROM (SELECT rowid, rank FROM memories_fts WHERE memories_fts MATCH ?) fts
       JOIN memories m ON m.id = fts.rowid
       WHERE 1=1`;
@@ -308,6 +496,9 @@ CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(created);
       return rows.map((r) => ({
         id: r.id, content: r.content, rank: r.rank,
         layer: r.layer, track: r.track, priority: r.priority,
+        tags: this._parseTags(r.tags),
+        // BM25 rank 越小越相关，归一化为 0-1 相似度
+        score: r.rank !== null && r.rank !== undefined ? 1 / (1 + Math.abs(r.rank)) : 0,
       }));
     }
 
@@ -322,7 +513,7 @@ CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(created);
   /** FTS MATCH 无结果时的 LIKE 回退（用于中文等 CJK 文本）。 */
   _ftsSearchLike(query, options = {}) {
     const { limit = 10, layer, layers, track, includeDeleted = false } = options;
-    let sql = 'SELECT id, content, layer, track, priority FROM memories WHERE 1=1';
+    let sql = 'SELECT id, content, layer, track, priority, tags FROM memories WHERE 1=1';
     const params = [];
     if (!includeDeleted) { sql += ' AND priority > 0'; }
     if (layer !== undefined) { sql += ' AND layer = ?'; params.push(layer); }
@@ -344,7 +535,10 @@ CREATE INDEX IF NOT EXISTS idx_memories_created ON memories(created);
     sql += ' ORDER BY priority DESC, id DESC LIMIT ?';
     params.push(Number(limit) || 10);
     const rows = this.db.prepare(sql).all(...params);
-    return rows.map((r) => ({ ...r, rank: 0 }));
+    return rows.map((r) => ({
+      id: r.id, content: r.content, layer: r.layer, track: r.track, priority: r.priority,
+      tags: this._parseTags(r.tags), rank: 0, score: 0.5,
+    }));
   }
 
   // 向量检索（余弦距离）。

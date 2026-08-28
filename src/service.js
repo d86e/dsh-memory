@@ -18,17 +18,18 @@ const LAYER_TITLES = {
 
 export class MemoryService {
   // 支持 new MemoryService(store, embeddingClient, config)
-  // 也支持 new MemoryService({ store, embeddingClient, config })
+  // 也支持 new MemoryService({ store, embeddingClient, config, logger })
   constructor(storeOrOptions, embeddingClient, config) {
     let store;
     let emb;
     let cfg;
+    let logger;
     if (storeOrOptions && typeof storeOrOptions === 'object' && !storeOrOptions.store
         && typeof embeddingClient === 'undefined' && typeof config === 'undefined') {
       // 单个 options 对象形式
-      ({ store, embeddingClient: emb, config: cfg } = storeOrOptions);
+      ({ store, embeddingClient: emb, config: cfg, logger } = storeOrOptions);
     } else if (storeOrOptions && storeOrOptions.store) {
-      ({ store, embeddingClient: emb, config: cfg } = storeOrOptions);
+      ({ store, embeddingClient: emb, config: cfg, logger } = storeOrOptions);
     } else {
       store = storeOrOptions;
       emb = embeddingClient;
@@ -38,6 +39,7 @@ export class MemoryService {
     this.store = store;
     this.embedding = emb || null;
     this.config = { ...DEFAULT_CONFIG, ...cfg };
+    this.logger = logger || null;
   }
 
   // 添加记忆。options: { layer?, track?, priority?, tags?, source?, embedding? }
@@ -62,12 +64,12 @@ export class MemoryService {
               track: track ?? best.track,
               priority: Math.max(priority ?? best.priority, best.priority),
             });
-            console.warn(`[dsh-memory] 记忆去重：与 id=${best.id} 相似度 ${(1 - best.dist).toFixed(3)}，已合并更新`);
+            this._log('info', `记忆去重：与 id=${best.id} 相似度 ${(1 - best.dist).toFixed(3)}，已合并更新`);
             return updated;
           }
         }
       } catch (err) {
-        console.warn(`[dsh-memory] 生成 embedding 失败（已跳过向量索引）: ${err.message}`);
+        this._log('warn', `生成 embedding 失败（已跳过向量索引）: ${err.message}`);
       }
     }
 
@@ -76,10 +78,23 @@ export class MemoryService {
       try {
         emb = await this.embedding.embedSingle(content);
       } catch (err) {
-        console.warn(`[dsh-memory] 生成 embedding 失败（已跳过向量索引）: ${err.message}`);
+        this._log('warn', `生成 embedding 失败（已跳过向量索引）: ${err.message}`);
       }
     }
     return this.store.add({ content, layer, track, priority, tags, source, embedding: emb });
+  }
+
+  // 内部日志：注入的 logger 优先，否则静默
+  _log(level, msg) {
+    const l = this.logger;
+    if (l && typeof l[level] === 'function') {
+      try { l[level](`[dsh-memory] ${msg}`); return; } catch { /* fall through */ }
+    }
+    // fallback: 仅 warn 级别允许到 stderr（避免 process 信息丢失），其余忽略
+    if (level === 'warn' && !l) {
+      // eslint-disable-next-line no-console
+      console.warn(`[dsh-memory] ${msg}`);
+    }
   }
 
   /** 合并两条相似记忆内容：保留较长/较新的版本，附加差异信息。 */
@@ -138,6 +153,27 @@ export class MemoryService {
 
   async remove(id, options = {}) {
     return this.store.remove(id, options);
+  }
+
+  // 分页 + 过滤 + 排序（rows 不含 embedding）
+  async listPage(opts = {}) {
+    return this.store.listPage(opts);
+  }
+
+  // 统计：总数 + byLayer/Track/Priority + topTags
+  async stats() {
+    return this.store.stats();
+  }
+
+  // 批量操作
+  async batchUpdate(ids, changes) {
+    return this.store.batchUpdate(ids, changes);
+  }
+  async batchRemove(ids, options) {
+    return this.store.batchRemove(ids, options);
+  }
+  async batchTag(ids, changes) {
+    return this.store.batchTag(ids, changes);
   }
 
   // 会话注入：Layer 4 全部 + Layer 3 top-K + Layer 2 top-K（按 priority）。
