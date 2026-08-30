@@ -10,6 +10,10 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json",
     "./memory-store": {
       "types": "./src/memory-store.d.ts",
       "default": "./src/memory-store.js"
@@ -23,10 +27,20 @@
       "default": "./src/service.js"
     }
   },
+  "dsh": {
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-cordis-client-runner"
+      ]
+    }
+  },
   "files": [
     "src",
     "lib",
-    "dsh-memory-ui",
     "models",
     "README.md"
   ],
