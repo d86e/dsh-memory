@@ -444,10 +444,55 @@ export declare function extractKeyPoints(
 ): KeyPoint[];
 
 /**
- * Extract 2-8-char CJK phrases and 3+-letter English words from a user text,
- * for FTS5 keyword recall.
+ * Extract 2-6-char CJK phrases and 3+-letter English words from a user text,
+ * for FTS5 keyword recall. Splits dashed compounds (dsh-memory → dsh, memory),
+ * preserves version-like tokens (v0.4.1, react18), filters common stop words.
  */
 export declare function extractKeywordsForRecall(text: string, max?: number): string[];
+
+/** Options for `llmFilterPoints`. */
+export interface LlmFilterPointsOptions {
+  /** Default 'deepseek'. */
+  provider?: string;
+  /** Default 'deepseek-chat'. */
+  model?: string;
+  /** Default 8000 ms. The filter must not block auto-save indefinitely. */
+  timeoutMs?: number;
+  logger?: ServiceLogger | null;
+}
+
+/**
+ * Minimal contract for `@deepseek-ai/dsh-llm` `LlmRuntime.stream` — only the
+ * call shape that dsh-memory actually uses. Lets d.ts consumers pass any
+ * compatible runtime without taking a hard dep on `@deepseek-ai/dsh-llm`.
+ */
+export interface LlmRuntimeLike {
+  stream(options: {
+    provider: string;
+    model: string;
+    messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>;
+    signal?: AbortSignal;
+  }): AsyncIterable<{
+    type?: string;
+    delta?: string;
+    text?: string;
+    finish?: unknown;
+  }>;
+}
+
+/**
+ * Use a small LLM to second-pass filter candidate key points. Asks the model
+ * which numbered items are worth keeping, parses the response, returns the
+ * surviving subset.
+ *
+ * On any failure (LLM error, timeout, malformed response) returns the input
+ * array unchanged so auto-save is never blocked.
+ */
+export declare function llmFilterPoints(
+  points: KeyPoint[],
+  runtime: LlmRuntimeLike | null | undefined,
+  opts?: LlmFilterPointsOptions,
+): Promise<KeyPoint[]>;
 
 // ─── Factory functions ────────────────────────────────────────────────────────
 
@@ -494,6 +539,14 @@ export interface PluginConfig {
   autoEmbed?: boolean;
   /** Default 768. */
   dimensions?: number;
+  /** Default false. When true, auto-save runs each candidate through `llmFilterPoints` before writing. */
+  llmFilter?: boolean;
+  /** Default 'deepseek'. */
+  llmProvider?: string;
+  /** Default 'deepseek-chat'. */
+  llmModel?: string;
+  /** Default 8000 ms. */
+  llmFilterTimeoutMs?: number;
 }
 
 /** DSH Cordis plugin lifecycle. */

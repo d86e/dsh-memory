@@ -97,12 +97,34 @@ export class MemoryService {
     }
   }
 
-  /** 合并两条相似记忆内容：保留较长/较新的版本，附加差异信息。 */
+  /**
+   * 合并两条相似记忆内容。
+   * 策略（v0.4.1 重写以避免 [补充: ...] 嵌套膨胀）：
+   *   1. 标准化两边：截掉旧的 [补充: ...] 嵌套（最多只取第一段）
+   *   2. 如果 new 是 old 的超集（new 包含 old 的主体），返回 new
+   *   3. 否则选较长的那条返回；附加短的那条末尾 30 字符（如果不同）
+   *   4. 用 ' | ' 分隔，不嵌套
+   */
   _mergeContent(oldContent, newContent) {
-    if (oldContent.length >= newContent.length) return oldContent;
-    // 简单策略：追加新内容片段，避免完全覆盖
-    const suffix = newContent.replace(oldContent, '').trim();
-    return suffix ? `${oldContent} [补充: ${suffix}]` : oldContent;
+    const stripSupplement = (s) => {
+      // 截掉 "[补充: ...]" 之后的所有内容（包括已有的补充）
+      const m = String(s).match(/^([\s\S]*?)\s*\[补充:[\s\S]*$/);
+      return m ? m[1].trim() : String(s).trim();
+    };
+    const oldBase = stripSupplement(oldContent);
+    const newBase = stripSupplement(newContent);
+    // 完全相同
+    if (oldBase === newBase) return newBase || newContent;
+    // new 包含 old 主体
+    if (newBase.includes(oldBase) && oldBase.length >= 6) return newContent;
+    if (oldBase.includes(newBase) && newBase.length >= 6) return oldContent;
+    // 不相交：选较长；尾部补短者的尾部 30 字符（如果不同）
+    const longer = oldBase.length >= newBase.length ? oldBase : newBase;
+    const shorter = oldBase.length >= newBase.length ? newBase : oldBase;
+    if (longer.includes(shorter)) return longer;
+    const tail = shorter.slice(-30).trim();
+    if (tail && !longer.includes(tail)) return `${longer} | ${tail}`;
+    return longer;
   }
 
   // 搜索记忆。options: { track?, layers?, limit?, useVector?, useFts5? }
