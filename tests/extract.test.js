@@ -154,3 +154,51 @@ test('extractKeyPoints: 复杂真实场景', () => {
     assert.ok(!/我需要|我打算/.test(p.content), `不应含元思考: ${p.content}`);
   }
 });
+
+// ─── v0.4.1 META_THOUGHT_RE 扩展黑名单 ────────────────────────────────────────
+
+test('extractKeyPoints: 拦住"我用/我用了"等 AI 自语 (v0.4.1)', () => {
+  const metaLines = [
+    '我用 runcode 写：',
+    '我用了 Node 全局类型但没声明依赖',
+    '我用 plan 模式先和你确认设计方向：',
+    '我用更严格的方式查找插件自己的 logger 输出：',
+    '我先写一个 regex',
+    '我尝试了 ONNX 推理',
+    '我选了 sqlite-vec',
+    '我选择 sqlite-vec',
+    '我准备接下来用 LLM 二次过滤',
+  ];
+  for (const line of metaLines) {
+    const out = extractKeyPoints(line + '\n');
+    // 整行都应被过滤掉
+    assert.equal(out.length, 0, `不应抽出: "${line}" 实际: ${JSON.stringify(out.map(p => p.content))}`);
+  }
+});
+
+test('extractKeyPoints: 保留"我们决定/采用/选定"等已发生决策', () => {
+  const keep = [
+    '我们决定采用 sqlite-vec 作为向量存储',
+    '我们决定将 active auto-memory 加上',
+    '我们选定 sqlite-vec 作为向量存储',
+  ];
+  for (const line of keep) {
+    const out = extractKeyPoints(line + '\n');
+    assert.ok(out.length > 0, `应保留: "${line}"`);
+    const dec = out.find(p => p.cat === 'decision');
+    assert.ok(dec, `应归类为 decision: "${line}"`);
+  }
+});
+
+test('extractKeyPoints: 真实事实/事实摘要在 META 黑名单下仍能命中', () => {
+  const text = `
+项目的端口是 3080，默认数据库路径是 ~/.dsh/memory.db。
+我偏好用 vim 编辑器。
+我们决定采用 sqlite-vec 作为向量存储。
+`;
+  const out = extractKeyPoints(text);
+  const cats = out.map(p => p.cat).sort();
+  assert.ok(cats.includes('pref'), '应有 pref');
+  assert.ok(cats.includes('decision'), '应有 decision');
+  assert.ok(cats.includes('fact'), '应有 fact');
+});
