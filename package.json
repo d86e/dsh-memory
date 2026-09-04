@@ -1,6 +1,6 @@
 {
   "name": "@d86e/dsh-memory",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Zero-dependency local memory system for DSH with SQLite, FTS5, ONNX embedding, and browser UI",
   "type": "module",
   "main": "lib/index.js",
