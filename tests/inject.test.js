@@ -53,3 +53,8 @@ test('extractKeywordsForRecall: 混合中英', () => {
   assert.match(joined, /sqlite/);
   assert.match(joined, /全文索引/);
 });
+
+test('extractKeywordsForRecall: 去重混合文本', () => {
+  const kws = extractKeywordsForRecall('vim vim vim 编辑器 编辑器 偏好');
+  assert.equal(new Set(kws).size, kws.length, '关键词应去重');
+});
