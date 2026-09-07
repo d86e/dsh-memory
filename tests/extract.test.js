@@ -355,9 +355,9 @@ test('extractKeyPoints: 批量处理性能', async () => {
   const start = Date.now();
   const results = texts.map(t => extractKeyPoints(t));
   const elapsed = Date.now() - start;
-  
+
   assert.ok(elapsed < 1000, `批量处理应 < 1s, 实际 ${elapsed}ms`);
   // 至少 50% 的文本应被处理
   const processed = results.filter(r => r.length > 0).length;
-  assert.ok(processed >= 50, );
+  assert.ok(processed >= 50, `至少 50 条应被处理, 实际 ${processed}`);
 });
