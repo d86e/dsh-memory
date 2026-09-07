@@ -261,3 +261,30 @@ test('extractKeyPoints: 过滤短文本', () => {
   const out = extractKeyPoints('好的');
   assert.equal(out.length, 0, '短文本不应被抽出');
 });
+
+// ─── v0.4.6 新增测试 ────────────────────────────────────────────────────────
+
+test('extractKeyPoints: 过滤过短片段（无关键词）', () => {
+  const out = extractKeyPoints('插件 v0.4.5');
+  assert.equal(out.length, 0, '过短且无关键词应被过滤');
+});
+
+test('extractKeyPoints: 保留有关键词的短片段', () => {
+  const out = extractKeyPoints('版本是 v0.4.6');
+  assert.ok(out.length > 0, '包含版本关键词应保留');
+});
+
+test('extractKeyPoints: 支持用户偏好模式', () => {
+  const out = extractKeyPoints('用户偏好使用 vim 编辑器');
+  const p = findByCat(out, 'pref');
+  assert.ok(p, '应识别用户偏好');
+  assert.equal(p.layer, 4);
+  assert.equal(p.track, 'user');
+});
+
+test('extractKeyPoints: 过滤以虚词开头的片段', () => {
+  const out = extractKeyPoints('的、了、在、是...等虚词片段');
+  // 这些应该被过滤或降低优先级
+  const hasNoise = out.some(p => /^的$|^了$|^在$|^是$/.test(p.content));
+  assert.equal(hasNoise, false, '不应包含纯虚词');
+});

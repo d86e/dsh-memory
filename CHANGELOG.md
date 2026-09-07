@@ -120,3 +120,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Memory quality: 35 → 14 high-quality memories after noise cleanup
 - Search relevance: FTS5-based injection prioritizes exact keyword matches
 - New test coverage for v0.4.4 noise filters
+
+## [0.4.6] — 2026-09-07
+
+### Improved
+- **Higher quality threshold**: Minimum memory length increased to 12 characters
+- **Short fragment filtering**: Fragments <8 chars without keywords are rejected
+- **User preference support**: Added pattern to detect "用户偏好/习惯..." expressions
+- **Keyword extraction**: Better handling of Chinese stopwords while preserving valid expressions like "我偏好"
+- **Quality scoring**: Added `scoreMemory()` function for ranking by quality
+
+### Fixed
+- Memory noise reduction: Filtered out trivial entries like "插件 v0.4.5", "测试全部通过 ✅"
