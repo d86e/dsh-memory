@@ -2,7 +2,7 @@
 // 单元测试：extractKeyPoints 的过滤与归类
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractKeyPoints, assessMemoryQuality } from '../lib/index.js';
+import { extractKeyPoints, assessMemoryQuality, scoreRecency } from '../lib/index.js';
 
 function findByCat(points, cat) {
   return points.find(p => p.cat === cat);
