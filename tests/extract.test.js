@@ -314,3 +314,17 @@ test('extractKeyPoints: 保留有效事实', () => {
     assert.ok(out.length > 0, `应保留: ${text}`);
   }
 });
+
+// ─── v0.4.6 质量评估测试 ────────────────────────────────────────────────────
+
+test('assessMemoryQuality: 高质量记忆得分高', () => {
+  const good = { content: 'DSH 默认端口是 3080', layer: 3, cat: 'fact' };
+  const score = assessMemoryQuality(good);
+  assert.ok(score >= 60, `高质量记忆应得分 >= 60, got ${score}`);
+});
+
+test('assessMemoryQuality: 低质量记忆得分低', () => {
+  const bad = { content: '让我重新设计', layer: 3, cat: 'fact' };
+  const score = assessMemoryQuality(bad);
+  assert.ok(score < 50, `低质量记忆应得分 < 50, got ${score}`);
+});
