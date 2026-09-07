@@ -347,3 +347,15 @@ test('extractKeyPoints: 纯数字不提取', () => {
   const out = extractKeyPoints('123456789');
   assert.equal(out.length, 0, '纯数字不应提取');
 });
+
+// ─── v0.4.6 性能测试 ─────────────────────────────────────────────────────────
+
+test('extractKeyPoints: 批量处理性能', async () => {
+  const texts = Array.from({ length: 100 }, (_, i) => `测试文本 ${i} 包含重要信息`);
+  const start = Date.now();
+  const results = texts.map(t => extractKeyPoints(t));
+  const elapsed = Date.now() - start;
+  
+  assert.ok(elapsed < 1000, `批量处理应 < 1s, 实际 ${elapsed}ms`);
+  assert.equal(results.filter(r => r.length > 0).length, 100, '所有文本应被处理');
+});
