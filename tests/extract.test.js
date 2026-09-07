@@ -351,7 +351,7 @@ test('extractKeyPoints: 纯数字不提取', () => {
 // ─── v0.4.6 性能测试 ─────────────────────────────────────────────────────────
 
 test('extractKeyPoints: 批量处理性能', async () => {
-  const texts = Array.from({ length: 100 }, (_, i) => `测试文本 ${i} 包含重要信息`);
+  const texts = Array.from({ length: 100 }, (_, i) => `DSH 默认端口是 ${3080 + i}`);
   const start = Date.now();
   const results = texts.map(t => extractKeyPoints(t));
   const elapsed = Date.now() - start;
