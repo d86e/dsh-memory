@@ -328,3 +328,22 @@ test('assessMemoryQuality: 低质量记忆得分低', () => {
   const score = assessMemoryQuality(bad);
   assert.ok(score < 70, `低质量记忆应得分 < 70, got ${score}`);
 });
+
+// ─── v0.4.6 边界测试 ─────────────────────────────────────────────────────────
+
+test('extractKeyPoints: 空输入处理', () => {
+  assert.equal(extractKeyPoints('').length, 0);
+  assert.equal(extractKeyPoints(null).length, 0);
+  assert.equal(extractKeyPoints(undefined).length, 0);
+});
+
+test('extractKeyPoints: 超长文本截断', () => {
+  const longText = 'a'.repeat(500);
+  const out = extractKeyPoints(longText);
+  assert.ok(out.length <= 10, '超长文本应被截断');
+});
+
+test('extractKeyPoints: 纯数字不提取', () => {
+  const out = extractKeyPoints('123456789');
+  assert.equal(out.length, 0, '纯数字不应提取');
+});
