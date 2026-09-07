@@ -132,3 +132,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Memory noise reduction: Filtered out trivial entries like "插件 v0.4.5", "测试全部通过 ✅"
+
+## [0.4.6] — 2026-09-07
+
+### Added
+- **Smart search fallback**: `smartSearch()` function with vector retrieval when FTS5 returns insufficient results
+- **Deduplication**: `deduplicateMemories()` function to remove duplicate entries
+- **Extended keyword extraction**: Increased from 6 to 8 keywords for better recall
+
+### Improved
+- **Lower length threshold**: Keywords with clear semantic meaning can be as short as 8 characters
+- **Better Chinese-English mixing**: Balanced extraction ensures both languages are represented
+- **User preference patterns**: Added support for "用户偏好/习惯..." expressions
+
+### Fixed
+- Fixed duplicate `hasKeyword` declaration
+- Fixed test cases for edge cases
+- Cleaned up 20+ noisy memories
+
+### Changed
+- Memory count: 35 → 13 high-quality memories
+- Test count: 87 → 94 tests
