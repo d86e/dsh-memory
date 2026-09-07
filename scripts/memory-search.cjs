@@ -13,8 +13,10 @@ const DB_PATH = process.env.DSH_HOME
 
 const args = process.argv.slice(2);
 const query = args.find(a => !a.startsWith('--'));
-const limitArg = args.find(a => a === '--limit' && args[args.indexOf(a) + 1]);
-const limit = limitArg ? parseInt(limitArg) : 10;
+const limitIdx = args.indexOf('--limit');
+const limit = limitIdx >= 0 && limitIdx < args.length - 1 
+  ? parseInt(args[limitIdx + 1]) || 10 
+  : 10;
 
 if (!query) {
   console.log('用法: node scripts/memory-search.cjs <关键词> [--limit N]');
