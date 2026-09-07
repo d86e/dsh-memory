@@ -288,3 +288,29 @@ test('extractKeyPoints: 过滤以虚词开头的片段', () => {
   const hasNoise = out.some(p => /^的$|^了$|^在$|^是$/.test(p.content));
   assert.equal(hasNoise, false, '不应包含纯虚词');
 });
+
+// ─── v0.4.6 噪音过滤测试 ────────────────────────────────────────────────────
+
+test('extractKeyPoints: 过滤过程性动作', () => {
+  const noisy = [
+    '让我重新设计一下方案',
+    '我们先来回顾一下历史',
+    '接下来我们将开始实现',
+  ];
+  for (const text of noisy) {
+    const out = extractKeyPoints(text);
+    assert.equal(out.length, 0, `应过滤: ${text}`);
+  }
+});
+
+test('extractKeyPoints: 保留有效事实', () => {
+  const facts = [
+    'DSH 默认端口是 3080',
+    '用户偏好使用 vim 编辑器',
+    '记忆插件开发完成',
+  ];
+  for (const text of facts) {
+    const out = extractKeyPoints(text);
+    assert.ok(out.length > 0, `应保留: ${text}`);
+  }
+});
