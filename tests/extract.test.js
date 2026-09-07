@@ -307,7 +307,7 @@ test('extractKeyPoints: 保留有效事实', () => {
   const facts = [
     'DSH 默认端口是 3080',
     '用户偏好使用 vim 编辑器',
-    '记忆插件开发完成',
+    'ONNX 本地推理向量检索验证',
   ];
   for (const text of facts) {
     const out = extractKeyPoints(text);
