@@ -361,3 +361,17 @@ test('extractKeyPoints: 批量处理性能', async () => {
   const processed = results.filter(r => r.length > 0).length;
   assert.ok(processed >= 50, `至少 50 条应被处理, 实际 ${processed}`);
 });
+
+// ─── v0.4.6 时效性测试 ────────────────────────────────────────────────────────
+
+test('scoreRecency: 新记忆得分高', () => {
+  const recent = { content: '测试', created_at: new Date().toISOString() };
+  const score = scoreRecency(recent);
+  assert.ok(score >= 60, `新记忆应得分 >= 60, got ${score}`);
+});
+
+test('scoreRecency: 旧记忆得分低', () => {
+  const old = { content: '测试', created_at: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString() };
+  const score = scoreRecency(old);
+  assert.ok(score <= 60, `旧记忆应得分 <= 60, got ${score}`);
+});
