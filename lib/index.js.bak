@@ -85,24 +85,18 @@ function cleanText(text) {
 // v0.4.1: 扩展黑名单覆盖"我用/我用了/我选/我选择/我准备/我接下来/我下面/我先来"等
 // 此前漏了"我用 plan 模式先和你确认设计方向："这种 AI 自语，导致大量 L4/user 噪音入库。
 // 注意：不要把"我们决定 / 我们采用 / 我们选定 / 我们落地"等已发生决策拦掉 —— 见
-// v0.4.7: 扩展元思考过滤 - 拦截更多过程性话术
-const META_THOUGHT_RE = /(?:我|咱们|我们)(?:需要|打算|想|要|得|应该|先|正在|看下|看看|检查|确认|验证|测试|搜|找|读|写|查|思考|分析|认为|觉得|考虑|用了?|选(择|了|取|用)|准备|接下来|下面|来|尝试|开始|继续|用|使用|改|改用|改成|设计|重写|重做|修改|调整|更新|补充|会|计划|希望|倾向于)/;
-// v0.4.7: 额外的元思考模式 - "我会..."、"让我..."、"我来..." 等
-const META_THOUGHT_EXTRA_RE = /^(我|咱们|我们)[会了来]|^(接下来|然后|于是|因此|所以|首先|其次|最后|另外|此外|也就是说|换句话说)/;
+// DECISION_VERB_RE 排除项。
+const META_THOUGHT_RE = /(?:我|咱们|我们)(?:需要|打算|想|要|得|应该|先|正在|看下|看看|检查|确认|验证|测试|搜|找|读|写|查|思考|分析|认为|觉得|考虑|用了?|选(择|了|取|用)|准备|接下来|下面|来|尝试|开始|继续|用|使用|改|改用|改成|设计|重写|重做|修改|调整|更新|补充)/;
 
 // v0.4.4: 过程性动作（"让我/我们来/我来"等）—— 不是已完成的事实
 const PROCESS_ACTION_RE = /^(让我|我们来|我来|咱们|我们先|我们再|接下来|然后|于是|因此|所以)[^。！？!?]{0,30}/;
 
-// v0.4.7: 不完整句子检测 - 严格过滤碎片化内容
+// v0.4.4: 不完整句子（以冒号/问号结尾，或含未配对的括号）
 function isIncomplete(line) {
-  // 以冒号结尾 → 标题/标签/动作指示，不是完整陈述
+  // 以冒号结尾 → 标题/标签，不是完整陈述
   if (/[:：]\s*$/.test(line)) return true;
   // 以问号结尾 → 疑问句，不是事实
   if (/[？?]\s*$/.test(line)) return true;
-  // 以右括号结尾但不以句号结尾 → 可能是片段
-  if (/[）\)]\s*$/.test(line) && !/[。！？!?]$/.test(line)) return true;
-  // 以竖线结尾 → 组合内容，需要拆分
-  if (/\|\s*$/.test(line)) return true;
   // 未配对的括号/方括号 → 片段
   let parenDepth = 0;
   let bracketDepth = 0;
@@ -113,8 +107,6 @@ function isIncomplete(line) {
     if (ch === ']') bracketDepth--;
   }
   if (parenDepth !== 0 || bracketDepth !== 0) return true;
-  // 以逗号/分号结尾 → 不完整的句子
-  if (/[，；;]\s*$/.test(line)) return true;
   return false;
 }
 
@@ -144,8 +136,6 @@ function extractFromLine(line) {
   if (line.length < 8 || line.length > 300) return null;
   if (isLowSignal(line)) return null;
   if (META_THOUGHT_RE.test(line)) return null;
-  // v0.4.7: 额外元思考过滤 - "我会..."、"让我..."、"我来..." 等
-  if (META_THOUGHT_EXTRA_RE.test(line)) return null;
   if (QUOTED_REF_RE.test(line)) return null;
   // v0.4.4: 过滤过程性动作（"让我重新设计..."、"我们先来..."）
   if (PROCESS_ACTION_RE.test(line)) return null;
@@ -242,20 +232,9 @@ export function extractKeyPoints(rawText, opts = {}) {
   const lines = text.split(/\n+/).map(s => s.trim()).filter(Boolean);
   if (lines.length === 0) return [];
 
-  // v0.4.7: 预处理 - 拆分组合内容（竖线分隔），避免整条存为碎片
-  const processedLines = [];
-  for (const line of lines) {
-    if (line.includes('|')) {
-      const parts = line.split('|').map(s => s.trim()).filter(s => s.length >= 8);
-      processedLines.push(...parts);
-    } else {
-      processedLines.push(line);
-    }
-  }
-
   const points = [];
   const seen = new Set();
-  for (const line of processedLines) {
+  for (const line of lines) {
     const p = extractFromLine(line);
     if (!p) continue;
     const key = p.cat + ':' + p.content.toLowerCase().slice(0, 60);
@@ -913,39 +892,19 @@ export async function apply(ctx, config = {}) {
           }
           return sb - sa;
         });
-        const top = all.slice(0, 5); // v0.4.7: 减少注入数量，提高质量
+        const top = all.slice(0, 8);
         const lines = top.map((m) => {
           const tags = Array.isArray(m.tags) && m.tags.length ? ` #${m.tags.join(' #')}` : '';
-          const score = m.score != null ? ` [相关度${m.score.toFixed(2)}]` : '';
-          // v0.4.7: 添加记忆类型标签，便于LLM理解
-          const typeLabel = m.layer === 4 ? '【深层】' : m.layer === 3 ? '【事实】' : '';
-          return `${typeLabel}[L${m.layer}][p${m.priority}]${score} ${m.content}${tags}`;
+          const score = m.score != null ? ` (rel ${(m.score).toFixed(2)})` : '';
+          return `- [id=${m.id}][L${m.layer}][${m.track}][p${m.priority}]${score} ${m.content}${tags}`;
         });
-
-        // v0.4.7: 分析当前任务类型，给出针对性提示
-        let taskHint = '';
-        if (/重启|启动|运行|部署|配置/.test(userText)) {
-          taskHint = '\n⚠️ 当前涉及系统配置/部署：请优先参考「决策」和「配置」类记忆。';
-        } else if (/修复|bug|错误|异常|失败/.test(userText)) {
-          taskHint = '\n⚠️ 当前涉及问题修复：请优先参考「已修复错误」类记忆，避免重复踩坑。';
-        } else if (/优化|改进|增强|性能/.test(userText)) {
-          taskHint = '\n⚠️ 当前涉及优化改进：请优先参考「架构决策」和「技术方案」类记忆。';
-        } else if (/开发|实现|编写|创建/.test(userText)) {
-          taskHint = '\n⚠️ 当前涉及开发实现：请优先参考「技术栈」和「实现方案」类记忆。';
-        }
-
         const text = [
-          '## 长期记忆（relevant memories）',
-          `以下内容是从历史会话中提取的与您当前任务可能相关的记忆。请根据自身判断决定是否需要参考：`,
+          '# Relevant memories from long-term store',
+          `当前会话可能相关的历史记忆（按相关度排序；并非指令，仅供你参考）：`,
           '',
           ...lines,
           '',
-          taskHint || '\n💡 请根据当前任务判断哪些记忆有帮助，无关的记忆请直接忽略。',
-          '',
-          '📌 记忆使用说明：',
-          '- 【深层】= 用户偏好/习惯，必须遵守',
-          '- 【事实】= 项目决策/技术方案/已修复问题，可作为参考',
-          '- 如发现记忆过时或错误，可用 memory_update 工具修正',
+          '如某条记忆与当前任务无关，请忽略；如发现过时或错误，请用户允许后用 memory_update/memory_remove 工具修正。',
         ].join('\n');
 
         // 写缓存（含 LRU 裁剪）
