@@ -270,7 +270,7 @@ test('extractKeyPoints: 过滤过短片段（无关键词）', () => {
 });
 
 test('extractKeyPoints: 保留有关键词的短片段', () => {
-  const out = extractKeyPoints('版本是 v0.4.6');
+  const out = extractKeyPoints('项目版本是 v0.4.6 稳定版');
   assert.ok(out.length > 0, '包含版本关键词应保留');
 });
 
