@@ -6,7 +6,7 @@ export const DEFAULT_CONFIG = {
   topKVector: 5,
   topKFts5: 5,
   maxInject: 15,
-  similarityThreshold: 0.15,
+  similarityThreshold: 0.3,
   autoEmbed: true,
 };
 
